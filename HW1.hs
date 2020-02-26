@@ -416,13 +416,15 @@ prjn i ( Snd (Pair e1 e2) ) = Snd ( Pair e1 ( prjn i e2 ) )
 prjn i ( Fst (Pair e1 e2) ) = Fst ( Pair ( prjn i e1 ) e2 )
 prjn 0 x = Fst x
 prjn i ( Pair e1 e2 ) = Snd (Pair e1 ( prjn (i - 1) e2 ) )
+prjn i ( If cond e1 e2 ) = If cond (prjn i e1) (prjn i e2)
 prjn i x = Fst x
 
 naryTests = test $ [eval (parse s) ~?= Just v | (s, v) <- tests]
                  ++ [eval (parse s) ~?= Nothing | s <- failTest ]
     where tests = [ ("prj[1] (1, 2, 3) + prj[2] (1, 2, 3)", VInt 5)
                   , ("prj[0] (True, 1, (True, 1, 2)) && prj[0] (prj[2] (True, 1, (True, 1, 2)))", VBool True)
-                  , ("prj[1] (prj[2] (True, 1, (True, 1, 2)))", VInt 1 ) ]
+                  , ("prj[1] (prj[2] (True, 1, (True, 1, 2)))", VInt 1 )
+                  , ("prj[2] (if True then (1,2,3) else (3,2,1))", VInt 3) ]
           failTest = [ "prj[3] (1,2,3)" ]
 
 
