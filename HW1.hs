@@ -87,7 +87,7 @@ which would be represented in Haskell as:
 --------------------------------------------------------------------------------}
 
 data Term = IConst Int | Plus Term Term | Times Term Term | IsZ Term
-          | BConst Bool | And Term Term | Not Term | If Term Term Term | Or Term Term
+          | BConst Bool | And Term Term | Not Term | If Term Term Term
           | Pair Term Term | Fst Term | Snd Term
   deriving (Eq, Show)
 
@@ -193,9 +193,11 @@ eval (And e1 e2)   = operate ( assertBoolV $ eval e1 ) $ \(VBool b1) ->
                      operate ( assertBoolV $ eval e2 ) $ \(VBool b2) ->
                      Just ( VBool ( b1 && b2 ) )
 
+{--
 eval (Or  e1 e2)   = operate ( assertBoolV $ eval e1 ) $ \(VBool b1) ->
                      operate ( assertBoolV $ eval e2 ) $ \(VBool b2) ->
                      Just ( VBool ( b1 || b2 ) )
+ --}
 
 eval (Not e)       = operate ( assertBoolV $ eval e ) $ \(VBool b) ->
                      Just ( VBool (not b) )
@@ -301,7 +303,11 @@ check ( Times e1 e2 )   = assertIntT $ assertSameT ( check e1 ) ( check e2 )
 check ( IsZ e )         = operate ( assertIntT $ check e ) $ \_ -> Just TBool
 check ( BConst _ )      = Just TBool
 check ( And e1 e2 )     = assertBoolT $ assertSameT ( check e1 ) ( check e2 )
+
+{--
 check ( Or  e1 e2 )     = assertBoolT $ assertSameT ( check e1 ) ( check e2 )
+ --}
+
 check ( Not e )         = assertBoolT $ check e
 check ( If cond r1 r2 ) = operate ( assertBoolT $ check cond ) $ \_ ->
                           assertSameT ( check r1 ) ( check r2 )
@@ -310,7 +316,6 @@ check ( Pair e1 e2 )    = operate ( check e1 ) $ \t1 ->
                           Just ( TPair t1 t2 )
 check ( Fst e )         = operate ( assertPairT $ check e ) $ \( TPair t1 t2 ) -> Just t1
 check ( Snd e )         = operate ( assertPairT $ check e ) $ \( TPair t1 t2 ) -> Just t2
-check _                 = Nothing
 
 assertSameT :: Maybe Type -> Maybe Type -> Maybe Type
 assertSameT ( Just TInt  ) ( Just TInt  ) = Just TInt
@@ -341,10 +346,12 @@ checkTests = test $ [check (parse s) ~?= Just t | (s, t) <- successes] ++
                     [check (parse s) ~?= Nothing | s <- failures]
     where successes = [ ("if isz 1 then 2 else 3", TInt)
                   , ("fst (1, True) + snd (True, 2)", TInt)
-                  , ("isz 0 && not (isz 1)", TBool) ]
+                  , ("isz 0 && not (isz 1)", TBool)
+                  , ("if isz 0 then 0 else 1", TBool ) ]
           failures  = [ "if 1 then 2 else 3"
                       , "fst True"
-                      , "(1, 2) + 3" ]
+                      , "(1, 2) + 3"
+                      , "if isz 0 then 1 else False" ]
 
 
 
@@ -401,13 +408,15 @@ the parser will call `npair [Const 1, Const 2, Const 3]`.
 --------------------------------------------------------------------------------}
 
 npair :: [Term] -> Term
-npair []       = BConst False
-npair ( t:[] ) = t
+npair [] = IConst 0
 npair ( t:ts ) = Pair t ( npair ts )
 
-prjn  :: Int -> Term -> Term
-prjn 0 ( Pair e1 _  ) = e1
-prjn n ( Pair _  e2 ) = prjn ( n - 1 ) e2
+prjn :: Int -> Term -> Term
+prjn i ( Snd (Pair e1 e2) ) = Snd ( Pair e1 ( prjn i e2 ) )
+prjn i ( Fst (Pair e1 e2) ) = Fst ( Pair ( prjn i e1 ) e2 )
+prjn 0 x = Fst x
+prjn i ( Pair e1 e2 ) = Snd (Pair e1 ( prjn (i - 1) e2 ) )
+prjn i x = Fst x
 
 naryTests = test [eval (parse s) ~?= Just v | (s, v) <- tests]
     where tests = [ ("prj[1] (1, 2, 3) + prj[2] (1, 2, 3)", VInt 5)
